@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>templateTitle</title>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+  <!-- EDIT THIS JAVASCRIPT! -->
+  <script type='text/javascript'>
+    pathToImages = "templateImagePath/"; // This is the path to the image folder relative to this webpage
+    uniqueName = "templateUniqueName"; // Give this image stack a unique name for bookmarking to work correctly
+    numberOfImages = templateNumberOfImages;  // Number of images in the stack
+    imagePrefix = "templateImagePrefix";  // The prefix of the image stack file names
+    numberingFormat = "templateNumberingFormat";  // eg. "000" for 000, 001, 002, 003 etc.
+    voxelSize = [templateVoxelX,templateVoxelY,templateVoxelZ]; // This needs to be a ratio of x:y:z voxel size.
+
+    pathToFPBioimage = "templatePathToFPBioimage"; // The path to the FPBioimage folder from this webpage
+  </script>
+  <!-- END OF REQUIRED EDITS -->
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://www.w3schools.com/lib/w3.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato">
+  <style>
+    html,body,h1,h2,h3,h4,h5 {font-family: "Lato", sans-serif}
+    * {margin: 0; padding:0;}
+    canvas {width:100%; height:100%; position: absolute;}
+  </style>
+</head>
+<body>
+
+<!-- Progress bar -->
+<div id="scriptProgress"> </div>
+<script type="text/javascript">
+var s = document.createElement("script");
+    s.type = "text/javascript";
+    s.src = pathToFPBioimage + "/Progress.js";
+    s.innerHTML = null;
+    document.getElementById("scriptProgress").innerHTML = "";
+    document.getElementById("scriptProgress").appendChild(s);
+</script>
+
+<!-- Put the WebGL Canvas in here-->
+<div>
+  <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+</div>
+
+<!-- Load the FPBioimage viewer -->
+<div id="scriptLoader"> </div>
+<script type="text/javascript">
+var s = document.createElement("script");
+    s.type = "text/javascript";
+    s.src = pathToFPBioimage + "/FPBioimageLoader.js";
+    s.innerHTML = null;
+    document.getElementById("scriptProgress").innerHTML = "";
+    document.getElementById("scriptProgress").appendChild(s);
+</script>
+
+</body>
+</html>
