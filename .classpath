@@ -2,6 +2,11 @@
 <classpath>
 	<classpathentry kind="src" path="fiji"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8"/>
-	<classpathentry kind="lib" path="C:/Users/Marcus/Apps/Fiji.app/jars/ij-1.51l-SNAPSHOT.jar"/>
+	<classpathentry kind="lib" path="C:/Users/carcu/Fiji.app/jars/ij-1.51s.jar"/>
+	<classpathentry kind="lib" path="lib/user/httpclient-4.5.4"/>
+	<classpathentry kind="lib" path="lib/user/httpcore-4.4.7"/>
+	<classpathentry kind="lib" path="lib/user/jets3t-0.9.4"/>
+	<classpathentry kind="lib" path="lib/user/commons-codec-1.11"/>
+	<classpathentry kind="lib" path="lib/user/xml-builder-1.0"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

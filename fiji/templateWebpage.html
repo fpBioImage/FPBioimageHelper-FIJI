@@ -1,60 +1,56 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>templateTitle</title>
-  <meta charset="utf-8">
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <head>
+    <title>templateTitle</title>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
-  <!-- EDIT THIS JAVASCRIPT! -->
-  <script type='text/javascript'>
-    pathToImages = "templateImagePath/"; // This is the path to the image folder relative to this webpage
-    uniqueName = "templateUniqueName"; // Give this image stack a unique name for bookmarking to work correctly
-    numberOfImages = templateNumberOfImages;  // Number of images in the stack
-    imagePrefix = "templateImagePrefix";  // The prefix of the image stack file names
-    numberingFormat = "templateNumberingFormat";  // eg. "000" for 000, 001, 002, 003 etc.
-    voxelSize = [templateVoxelX,templateVoxelY,templateVoxelZ]; // This needs to be a ratio of x:y:z voxel size.
+    <!-- EDIT THIS JAVASCRIPT! -->
+    <script type='text/javascript'>
+      fpb = {
+        pathToFPBioimage: "http://fpb.ceb.cam.ac.uk/3",
+        pathToImages: "templateImagePath/", // This is the path relative to this webpage
+        uniqueName: "templateUniqueName", // Give this image stack a unique name for bookmarking to work correctly
+        imagePrefix: "templateImagePrefix", // The prefix of the image stack file names
+        numberingFormat: "templateNumberingFormat", // eg. "000" for 000, 001, 002, 003 etc.
+        fileType: "png", // png or jpg
+        atlasMode: 'true', // True if providing pre-built texture atlases. Needs to be a string.
+        voxelSize: {x: templateVoxelX, y: templateVoxelY, z: templateVoxelZ}, // This just needs to be a ratio of x:y:z voxel size
+        numberOfImages: templateNumberOfImages, // Number of images in the stack
+        sliceWidth: templateSliceWidth, sliceHeight: templateSliceHeight, // The width and height of the image slices (before padding)
+        imageAlpha: 'false', // True for exports from Icy for nice alpha blending
+        opacity: 0.4, // Optional rendering parameter
+        intensity: 1.0, // Optional rendering parameter
+        threshold: 0.2 // Optional rendering parameter
+      }
+    </script>
+    <!-- END OF REQUIRED EDITS -->
 
-    pathToFPBioimage = "templatePathToFPBioimage"; // The path to the FPBioimage folder from this webpage
-  </script>
-  <!-- END OF REQUIRED EDITS -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto">
+    <style>
+      html,body,h1,h2,h3,h4,h5 {font-family: "Roboto", sans-serif}
+      body {overflow: hidden;}     
+      * {margin: 0; padding:0;}
+      #fullBrowserWindow {width:100%; height:100%; position: absolute;}
+      #fullBrowserWindow canvas {width: 100%; height:100%;}
+    </style>
+  </head>
+  <body>
 
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="https://www.w3schools.com/lib/w3.css">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato">
-  <style>
-    html,body,h1,h2,h3,h4,h5 {font-family: "Lato", sans-serif}
-    * {margin: 0; padding:0;}
-    canvas {width:100%; height:100%; position: absolute;}
-  </style>
-</head>
-<body>
+    <div id="jsHolder"></div>
 
-<!-- Progress bar -->
-<div id="scriptProgress"> </div>
-<script type="text/javascript">
-var s = document.createElement("script");
-    s.type = "text/javascript";
-    s.src = pathToFPBioimage + "/Progress.js";
-    s.innerHTML = null;
-    document.getElementById("scriptProgress").innerHTML = "";
-    document.getElementById("scriptProgress").appendChild(s);
-</script>
+    <script type="text/javascript">
+    var s1 = document.createElement("script");
+        s1.type = "text/javascript";
+        s1.src = fpb.pathToFPBioimage + "/FPProgress.js";
+        s1.innerHTML = null;
+        document.getElementById("jsHolder").innerHTML = "";
+        document.getElementById("jsHolder").appendChild(s1);
+    </script>
 
-<!-- Put the WebGL Canvas in here-->
-<div>
-  <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
-</div>
+    <!-- Put the WebGL Canvas in here-->
+    <div id="fullBrowserWindow"></div>
 
-<!-- Load the FPBioimage viewer -->
-<div id="scriptLoader"> </div>
-<script type="text/javascript">
-var s = document.createElement("script");
-    s.type = "text/javascript";
-    s.src = pathToFPBioimage + "/FPBioimageLoader.js";
-    s.innerHTML = null;
-    document.getElementById("scriptProgress").innerHTML = "";
-    document.getElementById("scriptProgress").appendChild(s);
-</script>
-
-</body>
+  </body>
 </html>
