@@ -1,0 +1,17 @@
+{
+        "pathToFPBioimage": "http://fpb.ceb.cam.ac.uk/4",
+        "pathToImages": "./",
+        "uniqueName": "templateUniqueName",
+        "imagePrefix": "templateImagePrefix",
+        "numberingFormat": "0000",
+        "fileType": "png",
+        "atlasMode": "true",
+        "voxelSize": {"x": templateVoxelX, "y": templateVoxelY, "z": templateVoxelZ},
+        "numberOfImages": templateNumberOfImages,
+        "sliceWidth": templateSliceWidth, "sliceHeight": templateSliceHeight,
+        "imageAlpha": "false",
+        "opacity": 5.0,
+        "intensity": 1.5, 
+        "threshold": 0.05,
+        "projection": 1
+}

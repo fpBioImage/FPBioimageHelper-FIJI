@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 import org.jets3t.service.S3Service;
 import org.jets3t.service.S3ServiceException;
@@ -30,57 +31,63 @@ import org.jets3t.service.acl.AccessControlList;
 import ij.*;
 import ij.gui.*;
 import ij.io.FileSaver;
+import ij.plugin.PlugIn;
 import ij.plugin.filter.PlugInFilter;
 import ij.process.*;
 
-public class Fpbioimage_helper implements PlugInFilter {
+public class Fpbioimage_helper implements PlugIn{
 
+	private String versionNumber = "4.0.3";
+	
 	public static String bucketName = "fpbhost";
 	private ImagePlus imp;
-	// Maybe require an RGB image? 
+	// Require an RGB image, so that output will look like preview
 	
+	/*
 	@Override
 	public int setup(String arg0, ImagePlus imp) {
 		this.imp = imp;
 		IJ.register(Fpbioimage_helper.class);
 		return DOES_RGB+NO_CHANGES;
-	}
+	}*/
 	
 	@Override
-	public void run(ImageProcessor ip) {
+	public void run(String inputArgs) {
+		imp = WindowManager.getCurrentImage();
 		String uniqueName = imp.getShortTitle();
 		
 		double voxelSizeX = imp.getCalibration().pixelWidth;
 		double voxelSizeY = imp.getCalibration().pixelHeight;
 		double voxelSizeZ = imp.getCalibration().pixelDepth;
 		
-		double scaleX = 1.0;
-		double scaleY = 1.0;
+		int imX = imp.getWidth();
+		int imY = imp.getHeight();
 		
-		if (ip.getWidth() > 500 || ip.getHeight() > 500){
-			double scale = Math.min(400.0/(double) ip.getWidth(), 400.0/(double) ip.getHeight());
-			scaleX = scale;
-			scaleY = scale;
-		}
-		
+		int resX = imX > 500 ? 499 : imX;
+		int resY = imY > 500 ? 499 : imY;
+				
+		boolean doSave = false;
 		boolean doUpload = false;
+		boolean openViewer = false;
 		
 		GenericDialog gd = new GenericDialog("FPBioimage Helper");
 		
 		gd.addStringField("Unique Name", uniqueName);
 		
 		gd.setInsets(5, 0, 3);
-		gd.addNumericField("Voxel size x", voxelSizeX, 2, 8, null);
-		gd.addNumericField("Voxel size y", voxelSizeY, 2, 8, null);
-		gd.addNumericField("Voxel size z", voxelSizeZ, 2, 8, null);
+		gd.addNumericField("X-voxel size", voxelSizeX, 3, 8, null);
+		gd.addNumericField("Y-voxel size", voxelSizeY, 3, 8, null);
+		gd.addNumericField("Z-voxel size", voxelSizeZ, 3, 8, null);
 		
 		gd.setInsets(5, 0, 3);
-		gd.addNumericField("Scale x", scaleX, 2, 8, null);
-		gd.addNumericField("Scale y", scaleY, 2, 8, null);
+		gd.addNumericField("X-resolution", resX, 0, 8, null);
+		gd.addNumericField("Y-resolution", resY, 0, 8, null);
 		
+		gd.addCheckbox("Save locally?", false);
 		gd.addCheckbox("Upload to FPB Host?", false);
+		gd.addCheckbox("Open in FPBioimage viewer?", false);
 		
-		gd.addHelp("http://fpb.ceb.cam.ac.uk/sharingGuide/");
+		gd.addHelp("https://fpb.ceb.cam.ac.uk/sharingGuide/");
 		
 		gd.showDialog();
 		if (gd.wasCanceled()){
@@ -90,45 +97,88 @@ public class Fpbioimage_helper implements PlugInFilter {
 		voxelSizeX = gd.getNextNumber();
 		voxelSizeY = gd.getNextNumber();
 		voxelSizeZ = gd.getNextNumber();
-		scaleX = gd.getNextNumber();
-		scaleY = gd.getNextNumber();
+		resX = (int)gd.getNextNumber();
+		resY = (int)gd.getNextNumber();
+		doSave = gd.getNextBoolean();
 		doUpload = gd.getNextBoolean();
+		openViewer = gd.getNextBoolean();
 		
-		// Check values
-		if (ip.getWidth() * scaleX > 500){
-			IJ.showMessage("Maximum X or Y size after scaling is 500. Please check X dimension.");
+		if (!doSave && !doUpload & !openViewer) {
+			IJ.showMessage("Not saving locally or uploading: nothing to do!");
 			return;
 		}
 		
-		if (ip.getHeight() * scaleY > 500){
-			IJ.showMessage("Maximum X or Y after scaling is 500. Please check Y dimension.");
+		// Check values
+		if (resX > 500){
+			IJ.showMessage("Maximum X or Y size is 500. Please check X dimension.");
+			return;
+		}
+		
+		if (resY > 500){
+			IJ.showMessage("Maximum X or Y is 500. Please check Y dimension.");
 			return;
 		}
 		
 		if (imp.getNSlices() > 500){
-			IJ.showMessage("Maximum Z size after scaling is 500. Please check Z dimension.");
+			IJ.showMessage("Maximum Z size is 500. Please check Z dimension.");
 			return;
 		}
+		
+		double scaleX = (double)resX / (double)imX;
+		double scaleY = (double)resY / (double)imY;
+		
+		// Check that we have the viewer on this computer. If not, offer option to download it. 
+        String pathToViewer = Prefs.get("fp.persistent.viewerpath", null);
+        if (pathToViewer == null || !(new File(pathToViewer).exists())) {
+        	int downloadFPBV = JOptionPane.showOptionDialog(null, "Could not find FPBioimage Viewer app on this comptuer.", "FPBioimage Viewer not found!", JOptionPane.YES_NO_CANCEL_OPTION,
+        			JOptionPane.WARNING_MESSAGE, null, new String[] {"Download", "Set path to Viewer", "Cancel"}, "default");
+        	if (downloadFPBV == 2) {return;}
+        	else if (downloadFPBV == 0) {
+        		try {
+					java.awt.Desktop.getDesktop().browse(new URI("https://fpb.ceb.cam.ac.uk/downloads/"));
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (URISyntaxException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+        	} else if (downloadFPBV == 1) {
+        		JFileChooser chooser = new JFileChooser();
+        		FileNameExtensionFilter filter = new FileNameExtensionFilter("Executable App", "exe");
+        		chooser.setFileFilter(filter);
+        		int returnVal = chooser.showOpenDialog(null);
+        		if (returnVal == JFileChooser.CANCEL_OPTION) {return;}
+        		pathToViewer = chooser.getSelectedFile().getAbsolutePath();
+        		Prefs.set("fp.persistent.viewerpath", pathToViewer);
+        	}
+        }
+
+		// Check uniqueName is in an OK format
+		validateName(uniqueName);
 		
 		IJ.showProgress(0.1);
 		
         // Choose folder for saving
-		String savepath = DirectoryChooser("fpsavepath", "Choose a folder for the webpage and image data"); // maybe this should actually be an html file, not a directory. 
-		if (savepath == null) return;
-		
-		// Maybe do this later on in the process? // Scale image, if necessary
-		
+		String savepath = null;
+		if (doSave) {
+			savepath = DirectoryChooser("fpsavepath", "Choose a folder for the webpage and image data"); // maybe this should actually be an html file, not a directory. 
+		} else {
+			savepath = new File("").getAbsolutePath().concat("/fpbtemp");
+			new File(savepath).mkdir();
+		}
+		if (savepath == null) return;		
 		
 		// Need to convert the PNG image stack into 8 pretty images
 		IJ.showStatus("Creating FP atlases");
-		int sliceWidth = (int)Math.round((float)imp.getWidth() * scaleX);
-		int sliceHeight = (int)Math.round((float)imp.getHeight() * scaleY);
+		int sliceWidth = resX;
+		int sliceHeight = resY;
 		int numberOfImages = imp.getNSlices(); // Not giving z-scaling option in imageJ. 
 		
 		int atlasWidth; int atlasHeight;
 		int numberOfAtlases = 8;
 		
-		int zPadding = 4;
+		int zPadding = 0;
 		int paddedSliceDepth = numberOfImages + zPadding;
 		
 		int paddedSliceWidth = ceil2(sliceWidth);
@@ -211,16 +261,6 @@ public class Fpbioimage_helper implements PlugInFilter {
     	
     	// And now to make the webpage
     	IJ.showStatus("Formatting webpage");
-        String pathTohtmlFile = "/templateWebpage.html";
-        int numLines = 56;
-        String[] webpageAsString = new String[numLines];
-        
-        try {
-			webpageAsString = readFileToString(pathTohtmlFile, numLines);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
         
         // Get canonical filenames for relative paths
         try {
@@ -228,32 +268,46 @@ public class Fpbioimage_helper implements PlugInFilter {
     	} catch (IOException e2) {
 			e2.printStackTrace();
 		}
-        
-        String relativePathToImages = "."; // Since they're in the same folder now.
-        
-        for (int i = 0; i<numLines; i++){
-        	webpageAsString[i] = webpageAsString[i].replace("templateTitle", uniqueName + " - FPBioimage Viewer");
-        	webpageAsString[i] = webpageAsString[i].replace("templateImagePath", relativePathToImages);
-        	webpageAsString[i] = webpageAsString[i].replace("templateUniqueName", uniqueName);
-        	webpageAsString[i] = webpageAsString[i].replace("templateNumberOfImages", Integer.toString(imp.getNSlices()));
-        	webpageAsString[i] = webpageAsString[i].replace("templateImagePrefix", uniqueName + "_z");
-        	webpageAsString[i] = webpageAsString[i].replace("templateNumberingFormat", "0000");
-        	webpageAsString[i] = webpageAsString[i].replace("templateVoxelX", Double.toString((voxelSizeX/scaleX)));
-        	webpageAsString[i] = webpageAsString[i].replace("templateVoxelY", Double.toString((voxelSizeY/scaleY)));
-        	webpageAsString[i] = webpageAsString[i].replace("templateVoxelZ", Double.toString((voxelSizeZ)));
-        	webpageAsString[i] = webpageAsString[i].replace("templateSliceWidth", Integer.toString(sliceWidth));
-        	webpageAsString[i] = webpageAsString[i].replace("templateSliceHeight", Integer.toString(sliceHeight));
-        }
-		
+        String relativePathToImages = "."; // Since they're in the same folder.
         String htmlSavePath =  savepath + "/index.html";
+        String jsonSavePath = savepath + "/jsonInfo.json";
         
-        // Finally, write the updated webpage to the save location
-        try {
-			writeStringToFile(htmlSavePath, webpageAsString);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+    	for (int f=0; f<2; f++) {
+	        String pathTohtmlFile = f==0 ? "/templateWebpage.html" : "/jsonTemplate.json"; 
+	        int numLines = f==0 ? 57 : 17;
+	        
+	        String[] webpageAsString = new String[numLines];
+	        
+	        try {
+				webpageAsString = readFileToString(pathTohtmlFile, numLines);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+	        
+	        for (int i = 0; i<numLines; i++){
+	        	webpageAsString[i] = webpageAsString[i].replace("templateTitle", uniqueName + " - FPBioimage Viewer");
+	        	//webpageAsString[i] = webpageAsString[i].replace("templateImagePath", f==0 ? relativePathToImages : savepath.replaceAll("\\\\", "/"));
+	        	webpageAsString[i] = webpageAsString[i].replace("templateUniqueName", uniqueName);
+	        	webpageAsString[i] = webpageAsString[i].replace("templateNumberOfImages", Integer.toString(imp.getNSlices()));
+	        	webpageAsString[i] = webpageAsString[i].replace("templateImagePrefix", uniqueName + "_z");
+	        	webpageAsString[i] = webpageAsString[i].replace("templateNumberingFormat", "0000");
+	        	webpageAsString[i] = webpageAsString[i].replace("templateVoxelX", Double.toString((voxelSizeX/scaleX)));
+	        	webpageAsString[i] = webpageAsString[i].replace("templateVoxelY", Double.toString((voxelSizeY/scaleY)));
+	        	webpageAsString[i] = webpageAsString[i].replace("templateVoxelZ", Double.toString((voxelSizeZ)));
+	        	webpageAsString[i] = webpageAsString[i].replace("templateSliceWidth", Integer.toString(sliceWidth));
+	        	webpageAsString[i] = webpageAsString[i].replace("templateSliceHeight", Integer.toString(sliceHeight));
+	        }
+	        
+	        // Finally, write the updated webpage to the save location
+	        String saveme = f==0 ? htmlSavePath : jsonSavePath;
+	        try {
+				writeStringToFile(saveme, webpageAsString);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+    	}
         IJ.showProgress(0.8);
         
         if (doUpload){
@@ -354,7 +408,7 @@ public class Fpbioimage_helper implements PlugInFilter {
 					try {
 						S3Object uploadThis = new S3Object(file);
 	            		uploadThis.setKey(keylist[i]);
-	            		uploadThis.addMetadata("Content-Type", "text/html");
+	            		uploadThis.addMetadata("Content-Type", "text/html"); // Probably shouldn't be tagging the png files as text/html...
 	            		uploadThis.setAcl(AccessControlList.REST_CANNED_PUBLIC_READ);
 	            		s3Service.putObject(bucketName, uploadThis);
 					} catch (NoSuchAlgorithmException | IOException e) {
@@ -365,12 +419,20 @@ public class Fpbioimage_helper implements PlugInFilter {
             		IJ.showProgress(0.8+0.2*((float)i/9.0));
 	            }
 	            
+	            // Delete temporary files if necessary. 
+	            if (!doSave) {
+	            	for (int i=0; i<filelist.length; i++) {
+	            		File deleteMe = new File(filelist[i]);
+	            		deleteMe.deleteOnExit();
+	            	}
+	            	new File(savepath).deleteOnExit();
+	            	new File(new File("").getAbsolutePath().concat("/fpbtemp")).deleteOnExit();
+	            }
+	            
 	            int showWebDlg = JOptionPane.showConfirmDialog(null, "Would you like to view the webpage now?", "Upload complete!", JOptionPane.YES_NO_OPTION);
-	            Boolean showWeb = showWebDlg == 1 ? true : false;
 	            // Show webpage in default browser
-	            if (showWeb){ 
-	            	try {
-						java.awt.Desktop.getDesktop().browse(new URI("http://s3.amazonaws.com/fpbhost/" + keyPrefix + "/index.html"));
+	            if (showWebDlg == JOptionPane.YES_OPTION){	            	try {
+						java.awt.Desktop.getDesktop().browse(new URI("https://s3.amazonaws.com/fpbhost/" + keyPrefix + "/index.html"));
 					} catch (IOException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
@@ -379,14 +441,22 @@ public class Fpbioimage_helper implements PlugInFilter {
 						e.printStackTrace();
 					}
 	            }
-            } else {
+            } else if (doSave){
             	JOptionPane.showConfirmDialog(null,	"Data saved locally to " + htmlSavePath, "Complete!", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE);
             } // End of confirmUpload if
-        } else {
+        } else if (doSave){
         	JOptionPane.showConfirmDialog(null,"Data saved locally to " + htmlSavePath, "Complete!", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE);
         } // End of doUpload if
+        
         IJ.showStatus("");
         IJ.showProgress(1.1);
+        
+        if (openViewer) {
+        	Runnable r = new FPRunnable(pathToViewer, jsonSavePath);
+        	new Thread(r).start();
+        }
+        
+        
 	} // End of Fpbioimage_helper class
 	
 	  /**
@@ -396,6 +466,37 @@ public class Fpbioimage_helper implements PlugInFilter {
      * @return The path to the exported resource
      * @throws Exception
      */
+	
+	public class FPRunnable implements Runnable{
+		String pathToFPViewer;
+		String jsonPath;
+		public FPRunnable(String pathToViewer, String jsonSavePath) {
+			pathToFPViewer = pathToViewer;
+			jsonPath = jsonSavePath;
+		}
+		
+		public void run() {
+			// Check if viewer exists and is up to date
+        	try {
+    			String workingDir = new File(".").getCanonicalPath();
+    			
+    			//boolean exists = new File(pathToFPViewer).exists();
+    			
+    			//if (!exists) {
+    				// Download FPViewer
+    			//}
+    			
+        		String cmd = "\"" + pathToFPViewer + "\" -jsonFile " + "\"" + jsonPath + "\"";
+				ProcessBuilder pb = new ProcessBuilder(cmd);
+				pb.redirectErrorStream(true);
+				Process proc = pb.start();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	}
+	
     static public String ExportResource(String resourceName, String outputName) throws Exception {
         InputStream stream = null;
         OutputStream resStreamOut = null;
@@ -478,12 +579,10 @@ public class Fpbioimage_helper implements PlugInFilter {
 		}
     }
     
-    public String[] readFileToString(String pathToFile, int numLines) throws IOException {
-    	//FileReader fr = new FileReader(pathToFile);
-    	//BufferedReader textReader = new BufferedReader(fr);
-    	
+    public String[] readFileToString(String pathToFile, int numLines) throws IOException {   	
     	InputStream fr = getClass().getResourceAsStream(pathToFile);
-    	BufferedReader textReader = new BufferedReader(new InputStreamReader(fr));
+    	InputStreamReader isr = new InputStreamReader(fr);
+    	BufferedReader textReader = new BufferedReader(isr);
         	
     	String[] textData = new String[numLines];
     	
@@ -491,18 +590,21 @@ public class Fpbioimage_helper implements PlugInFilter {
     		textData[i] = textReader.readLine();
     	}
     	
+    	fr.close();
+    	isr.close();
     	textReader.close();
     	return textData;
     }
     
     public static void writeStringToFile(String filename, String[] stringToWrite) throws IOException{
-    	BufferedWriter outputWriter = null;
-    	outputWriter = new BufferedWriter(new FileWriter(filename));
+    	FileWriter fw = new FileWriter(filename);
+    	BufferedWriter outputWriter = new BufferedWriter(fw);
     	for (int i=0; i<stringToWrite.length; i++){
     		outputWriter.write(stringToWrite[i]);
     		outputWriter.newLine();
     	}
     	outputWriter.flush();
+    	fw.close();
     	outputWriter.close();
     }
 
